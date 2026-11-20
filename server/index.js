@@ -6,6 +6,7 @@ import { callStructured, aiConfigured, AnalysisError, MODEL } from './ai.js';
 import { SYSTEM_PROMPT, passageBlock, overviewTask, detailsTask, sentencesTask, questionsTask, LEVELS } from './prompts.js';
 import { overviewSchema, detailsSchema, sentencesSchema, questionsSchema, QUESTION_TYPES } from './schemas.js';
 import { SyncStore, newSyncCode, isValidCode } from './sync-store.js';
+import { studyverseRouter } from './studyverse.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, '..');
@@ -238,6 +239,9 @@ sync.put('/:code', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 app.use('/api/sync', sync);
+
+// ── STUDYVERSE 게임: AI 콘텐츠 창작 (선택) ──
+app.use('/api/studyverse', studyverseRouter(rateLimit));
 
 app.use('/api', (req, res) => res.status(404).json({ error: { code: 'not_found', message: '존재하지 않는 API입니다.' } }));
 

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a1626">
+<meta name="description" content="네가 공부한 만큼, 세계가 깨어난다. 공부 시간과 연동되는 픽셀 아트 판타지 RPG · 마법학교 경영 시뮬레이션.">
+<title>STUDYVERSE : 지식의 세계</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect x='3' y='0' width='2' height='1' fill='%23c9a35a'/%3E%3Crect x='2' y='1' width='4' height='1' fill='%23c9a35a'/%3E%3Crect x='2' y='2' width='4' height='4' fill='%23ffd86b'/%3E%3Crect x='3' y='3' width='2' height='2' fill='%23fff'/%3E%3Crect x='2' y='6' width='4' height='1' fill='%23c9a35a'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+<div id="app">
+  <header id="hud">
+    <div class="who">
+      <div><b id="hud-name"></b> <span id="hud-title" class="dim"></span></div>
+      <div id="hud-xp" class="bar xp"><i></i></div>
+    </div>
+    <button id="hud-timer" class="chip timerchip" hidden></button>
+    <div id="hud-res"></div>
+  </header>
+  <main id="view">
+    <canvas id="stage" aria-label="게임 화면"></canvas>
+    <aside id="panel-wrap">
+      <button id="panel-close" class="btn ghost sm" aria-label="닫기">✕ 학당으로</button>
+      <div id="panel"></div>
+    </aside>
+  </main>
+  <nav id="menu">
+    <button data-view="home"><span class="mi">🏛</span><span>메인</span></button>
+    <button data-view="study"><span class="mi">⏱</span><span>공부</span></button>
+    <button data-view="char"><span class="mi">🧙</span><span>캐릭터</span></button>
+    <button data-view="spells"><span class="mi">✦</span><span>마법</span></button>
+    <button data-view="inv"><span class="mi">🎒</span><span>인벤토리</span></button>
+    <button data-view="quests"><span class="mi">📜</span><span>퀘스트</span></button>
+    <button data-view="school"><span class="mi">🏫</span><span>학교 경영</span></button>
+    <button data-view="map"><span class="mi">🗺</span><span>세계 지도</span></button>
+    <button data-view="codex"><span class="mi">📖</span><span>도감</span></button>
+    <button data-view="story"><span class="mi">🕯</span><span>스토리</span></button>
+    <button data-view="settings"><span class="mi">⚙</span><span>설정</span></button>
+  </nav>
+</div>
+<div id="dialog"></div>
+<div id="modal"></div>
+<div id="toasts" aria-live="polite"></div>
+<div id="blocker" hidden></div>
+<div id="title" hidden>
+  <div class="tbox">
+    <div class="logo">STUDYVERSE</div>
+    <div class="sub">지식의 세계</div>
+    <p class="slogan">네가 공부한 만큼, 세계가 깨어난다.</p>
+    <p class="dim small">세상의 빛이 꺼져 가는 시대. 마지막 빛이 남은 헤스페린 학당에 신입생이 도착한다.</p>
+    <div class="tform"></div>
+    <p class="dim small">진행 상황은 이 브라우저에 자동 저장됩니다.</p>
+  </div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
