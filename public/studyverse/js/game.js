@@ -223,14 +223,23 @@ export function finishStudy() {
   if (isNight) S.study.night++;
   if (isMorning) S.study.morning++;
   updateStreak();
-
-  // 보상 계산
+  const reward = grantStudy(minutes, { night: isNight, morning: isMorning, deep: minutes >= 45 });
+  S.study.sessions.push({ id: a.id, start: a.startedAt, end: now, min: minutes, label: a.label, xp: reward.xp });
+  if (S.study.sessions.length > 400) S.study.sessions.splice(0, S.study.sessions.length - 400);
+  const goalHit = checkGoal(dayKey(now), reward);
+  checkUnlocks();
+  commit();
+  emit('studyDone', { minutes, reward, capped, goalHit });
+  return { minutes, reward, capped };
+}
+/** 공부 분량에 따른 보상 계산 · 지급 (타이머와 사진 인증이 함께 쓴다) */
+function grantStudy(minutes, { night = false, morning = false, deep = false } = {}) {
   const b = bonuses(), st = stats();
   const fac = S.school.fac;
   let xpMul = 1 + (b.xp || 0) + fac.classroom * 0.03 + st.foc * 0.002 + Math.min(0.14, S.study.streak * (b.streak || 0));
-  if (minutes >= 45) xpMul += b.deep || 0;
-  if (isNight) xpMul += b.night || 0;
-  const lightMul = 1 + (b.light || 0) + fac.library * 0.04 + (isMorning ? (b.morning || 0) : 0);
+  if (deep) xpMul += b.deep || 0;
+  if (night) xpMul += b.night || 0;
+  const lightMul = 1 + (b.light || 0) + fac.library * 0.04 + (morning ? (b.morning || 0) : 0);
   const reward = {
     xp: Math.round(minutes * 10 * xpMul),
     light: Math.floor((minutes / 2) * lightMul),
@@ -239,33 +248,95 @@ export function finishStudy() {
     research: Math.floor(minutes / 10 * (1 + (b.research || 0))),
   };
   giveRes({ light: reward.light, gold: reward.gold, mana: reward.mana, stamina: reward.stamina, research: reward.research });
-  S.study.sessions.push({ id: a.id, start: a.startedAt, end: now, min: minutes, label: a.label, xp: reward.xp });
-  if (S.study.sessions.length > 400) S.study.sessions.splice(0, S.study.sessions.length - 400);
   addXp(reward.xp);
+  return reward;
+}
+function checkGoal(day, reward) {
+  if (S.study.goals[day] || (S.study.days[day] || 0) < S.study.goalMin) return false;
+  S.study.goals[day] = true;
+  const m = 1 + (bonuses().goal || 0);
+  giveRes({ light: 30, gold: 150, crystal: 2 }, m);
+  reward.goal = true;
+  toast(`일일 목표 달성! 지식의 빛 +${30 * m}, 골드 +${150 * m}, 수정 +${2 * m}`, 'level');
+  return true;
+}
+/** 연속 공부일: 날짜별 기록에서 다시 계산한다 (지난 날짜를 사진으로 인증해도 정확) */
+function updateStreak() {
+  const has = (k) => (S.study.days[k] || 0) >= 1;
+  const d = new Date(); d.setHours(12, 0, 0, 0);
+  if (!has(dayKey(d.getTime()))) d.setDate(d.getDate() - 1);
+  let n = 0;
+  while (has(dayKey(d.getTime()))) { n++; d.setDate(d.getDate() - 1); }
+  S.study.streak = n;
+  S.study.bestStreak = Math.max(S.study.bestStreak, n);
+  S.study.lastDay = dayKey();
+}
 
-  // 일일 목표
-  const today = dayKey(now);
-  let goalHit = false;
-  if (!S.study.goals[today] && (S.study.days[today] || 0) >= S.study.goalMin) {
-    S.study.goals[today] = true; goalHit = true;
-    const m = 1 + (b.goal || 0);
-    giveRes({ light: 30, gold: 150, crystal: 2 }, m);
-    reward.goal = true;
-    toast(`일일 목표 달성! 지식의 빛 +${30 * m}, 골드 +${150 * m}, 수정 +${2 * m}`, 'level');
+// ───────────────────────── 사진 인증 (다른 공부 앱의 스크린샷) ─────────────────────────
+// 같은 날짜의 사진은 '그날 이미 기록된 시간(타이머 + 이전 사진)'을 넘는 만큼만 인정한다.
+// → 같은 사진을 다시 올리거나, 타이머와 사진으로 같은 공부를 두 번 기록해도 보상이 중복되지 않는다.
+export const PHOTO_MAX_AGE_DAYS = 7;
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+/** 스크린샷의 월/일(+요일)을 실제 날짜로 확정한다. 연도는 오늘 이전의 가장 가까운 해. */
+export function resolvePhotoDate({ month, day, weekday }, now = new Date()) {
+  if (!(month >= 1 && month <= 12 && day >= 1 && day <= 31)) return { error: '사진에서 날짜를 읽지 못했습니다. 날짜가 보이게 찍어 주세요.' };
+  let found = null;
+  for (const y of [now.getFullYear(), now.getFullYear() - 1]) {
+    const d = new Date(y, month - 1, day, 12);
+    if (d.getMonth() !== month - 1) continue;
+    if (dayKey(d.getTime()) <= dayKey(now.getTime())) { found = d; break; }
   }
+  if (!found) return { error: '미래 날짜의 기록은 인증할 수 없습니다.' };
+  const key = dayKey(found.getTime());
+  const age = daysBetween(key, dayKey(now.getTime()));
+  if (weekday && WEEKDAYS.includes(weekday) && WEEKDAYS[found.getDay()] !== weekday) return { error: `날짜(${month}월 ${day}일)와 요일(${weekday})이 맞지 않습니다.` };
+  if (age > PHOTO_MAX_AGE_DAYS) return { error: `${PHOTO_MAX_AGE_DAYS}일보다 오래된 기록은 인증할 수 없습니다.` };
+  return { key, age };
+}
+/** 판독 결과 검토: 인정될 분량을 계산한다 (아직 지급하지 않음) */
+export function reviewPhoto(read, hash) {
+  if (!read || !read.is_study_timer) return { error: '공부 시간 기록 화면으로 보이지 않습니다.' };
+  if (hash && S.study.photos?.some((p) => p.hash === hash)) return { error: '이미 인증에 사용한 사진입니다.' };
+  const date = resolvePhotoDate(read.date || {});
+  if (date.error) return date;
+  const subjects = (read.subjects || []).filter((x) => x.seconds > 0);
+  const sum = subjects.reduce((a, x) => a + x.seconds, 0);
+  let total = read.total_seconds > 0 ? read.total_seconds : sum;
+  if (!(total > 0)) return { error: '공부 시간을 읽지 못했습니다.' };
+  const warn = [];
+  if (sum > 0 && read.total_seconds > 0 && Math.abs(sum - read.total_seconds) > 120) {
+    warn.push('총 시간과 과목별 합계가 달라 더 작은 값을 인정합니다.');
+    total = Math.min(sum, read.total_seconds);
+  }
+  total = Math.min(total, 16 * 3600);
+  const photoMin = Math.floor(total / 60);
+  const already = Math.floor(S.study.days[date.key] || 0);
+  const credit = Math.max(0, photoMin - already);
+  return { date: date.key, age: date.age, totalSec: total, photoMin, already, credit, subjects, warn };
+}
+/** 검토 결과를 확정하고 보상을 지급한다 */
+export function creditPhoto(rv, hash) {
+  S.study.photos ||= [];
+  if (hash && S.study.photos.some((p) => p.hash === hash)) return null;
+  const rec = { hash, date: rv.date, totalSec: rv.totalSec, credited: rv.credit, at: Date.now(), subjects: rv.subjects.slice(0, 12).map((x) => ({ name: String(x.name).slice(0, 20), seconds: x.seconds })) };
+  S.study.photos.push(rec);
+  if (S.study.photos.length > 200) S.study.photos.splice(0, S.study.photos.length - 200);
+  if (rv.credit < 1) { commit(); return { minutes: 0 }; }
+  S.study.days[rv.date] = Math.min(16 * 60, (S.study.days[rv.date] || 0) + rv.credit);
+  S.study.totalMs += rv.credit * 60000;
+  S.study.longest = Math.max(S.study.longest, rv.credit);
+  updateStreak();
+  const reward = grantStudy(rv.credit, {});
+  const label = '사진 인증 · ' + (rv.subjects.length ? rv.subjects.slice(0, 3).map((x) => x.name).join(', ') : '공부 앱');
+  const id = uid('ph');
+  S.study.ledger[id] = rv.credit;
+  S.study.sessions.push({ id, start: new Date(rv.date + 'T12:00:00').getTime(), end: Date.now(), min: rv.credit, label, xp: reward.xp, photo: true });
+  if (S.study.sessions.length > 400) S.study.sessions.splice(0, S.study.sessions.length - 400);
+  const goalHit = checkGoal(rv.date, reward);
   checkUnlocks();
   commit();
-  emit('studyDone', { minutes, reward, capped, goalHit });
-  return { minutes, reward, capped };
-}
-function updateStreak() {
-  const today = dayKey();
-  const last = S.study.lastDay;
-  if (last === today) return;
-  if (last && daysBetween(last, today) === 1) S.study.streak++;
-  else S.study.streak = 1; // 쉬어도 이전 성과는 사라지지 않는다. 연속 기록만 새로 시작.
-  S.study.bestStreak = Math.max(S.study.bestStreak, S.study.streak);
-  S.study.lastDay = today;
+  emit('studyDone', { minutes: rv.credit, reward, goalHit });
+  return { minutes: rv.credit, reward };
 }
 export const totalMin = () => Math.floor(S.study.totalMs / 60000);
 export const todayMin = () => Math.floor(S.study.days[dayKey()] || 0);

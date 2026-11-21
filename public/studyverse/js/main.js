@@ -12,6 +12,7 @@ import { $, h, fmtDur, fmtMin, beep } from './util.js';
 
 const scenes = { school: new SchoolScene(), world: new WorldScene(), region: new RegionScene(), study: new StudyScene() };
 let aiState = '확인 중…';
+let aiOk = false;
 let blocked = false;
 
 // ───────────────────────── 외형 ─────────────────────────
@@ -309,7 +310,7 @@ function initState(s) {
 }
 setHooks({
   portraitFor, playerOpts, studentOpts, weather, interact, startExplore, act, nextEnc, endExplore,
-  near: () => scenes.school.near, aiStatus: () => aiState,
+  near: () => scenes.school.near, aiStatus: () => aiState, aiConfigured: () => aiOk,
   replaceState: (ns) => { initState(ns); render(); G.toast('백업을 불러왔습니다.', 'level'); },
   onView: (v) => document.body.classList.toggle('panel-open', v !== 'home'),
 });
@@ -318,6 +319,7 @@ async function checkAi() {
   try {
     const r = await fetch('/api/status');
     const j = await r.json();
+    aiOk = Boolean(j?.ai?.configured);
     aiState = j?.ai?.configured ? `연결됨 (${j.ai.model})` : '서버에 API 키가 설정되지 않음 — 기본 콘텐츠로 플레이합니다';
   } catch { aiState = 'AI 서버 없음 (정적 호스팅) — 기본 콘텐츠로 플레이합니다'; }
 }

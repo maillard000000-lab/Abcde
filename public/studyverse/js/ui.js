@@ -212,6 +212,7 @@ function vStudy() {
     h('h2', '공부 타이머'),
     h('p.dim', '실제 시각을 기준으로 기록합니다. 탭을 닫거나 화면이 꺼져도 시간이 정확하게 계산됩니다.'),
     h('div.timerbox', time, phase, a ? h('div.dim', a.label || '자유 공부', a.mode === 'pomo' ? ' · 뽀모도로' : '') : label, ctrl),
+    photoSection(),
     section('보상 안내',
       h('ul.dim.small',
         h('li', '1분마다 경험치 10 (보너스 적용), 2분마다 지식의 빛 1, 골드 2, 마나 1'),
@@ -224,6 +225,96 @@ function vStudy() {
     section('최근 기록',
       s.study.sessions.length ? h('ul.list', s.study.sessions.slice(-8).reverse().map((x) => h('li', h('span', new Date(x.start).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })), h('span', x.label || '공부'), h('b', `${x.min}분`), h('span.dim', `+${fmt(x.xp)} XP`)))) : h('p.dim', '아직 기록이 없습니다.')),
   );
+}
+// ── 공부 앱 사진 인증 ──
+const hms = (sec) => `${Math.floor(sec / 3600)}:${String(Math.floor(sec / 60) % 60).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+function photoSection() {
+  const s = S();
+  const recent = (s.study.photos || []).slice(-5).reverse();
+  return section('공부 앱 사진 인증',
+    h('p.small', '다른 공부 타이머 앱(열품타 등)의 기록 화면을 캡처해서 올리면, AI가 날짜와 총 공부 시간·과목별 시간을 읽어 인증합니다.'),
+    h('ul.small.dim',
+      h('li', '날짜와 총 시간이 보이게 캡처해 주세요. 원본 스크린샷이 가장 정확합니다.'),
+      h('li', `같은 날짜는 그날 이미 기록된 시간(게임 타이머 + 이전 사진)을 넘는 만큼만 인정됩니다. 공부 중간에 올리고 나중에 다시 올려도 중복되지 않아요.`),
+      h('li', `최근 ${G.PHOTO_MAX_AGE_DAYS}일 이내의 기록만 인증할 수 있습니다.`)),
+    h('div.acts', btn('📷 스크린샷 올리기', pickPhoto, '.gold')),
+    hooks.aiConfigured?.() ? null : h('p.small.warn', `사진 판독에는 AI 서버가 필요합니다. 현재: ${hooks.aiStatus()}`),
+    recent.length ? h('ul.list', recent.map((p) => h('li', h('span', p.date), h('span.dim', `사진 ${hms(p.totalSec)}`), h('b', p.credited ? `+${p.credited}분` : '추가 없음')))) : null);
+}
+function pickPhoto() {
+  const inp = h('input', { type: 'file', accept: 'image/*' });
+  inp.onchange = () => { if (inp.files[0]) handlePhoto(inp.files[0]); };
+  inp.click();
+}
+async function sha256(buf) {
+  try {
+    const d = await crypto.subtle.digest('SHA-256', buf);
+    return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    let x = 2166136261; const u = new Uint8Array(buf);
+    for (let i = 0; i < u.length; i += 7) { x ^= u[i]; x = Math.imul(x, 16777619); }
+    return 'f' + (x >>> 0).toString(16) + u.length;
+  }
+}
+function loadImage(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => { const img = new Image(); img.onload = () => res(img); img.onerror = () => rej(new Error('이미지를 열 수 없습니다.')); img.src = r.result; };
+    r.onerror = () => rej(new Error('파일을 읽을 수 없습니다.'));
+    r.readAsDataURL(file);
+  });
+}
+async function handlePhoto(file) {
+  if (!file.type.startsWith('image/')) return G.toast('이미지 파일만 올릴 수 있습니다.', 'warn');
+  if (file.size > 30 * 1024 * 1024) return G.toast('파일이 너무 큽니다 (최대 30MB).', 'warn');
+  const busy = loadingBox('사진 속 공부 기록을 읽는 중…');
+  let read, hash, preview;
+  try {
+    hash = await sha256(await file.arrayBuffer());
+    const img = await loadImage(file);
+    const k = Math.min(1, 2000 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    const cx = c.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height); cx.drawImage(img, 0, 0, c.width, c.height);
+    const dataUrl = c.toDataURL('image/jpeg', 0.9);
+    const t = document.createElement('canvas'); const tk = 220 / Math.max(c.width, c.height);
+    t.width = Math.round(c.width * tk); t.height = Math.round(c.height * tk); t.getContext('2d').drawImage(c, 0, 0, t.width, t.height);
+    preview = t.toDataURL('image/jpeg', 0.8);
+    const res = await fetch('/api/studyverse/verify', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image: dataUrl.split(',')[1], mediaType: 'image/jpeg', today: dayKey() }) });
+    let j = null; try { j = await res.json(); } catch { /* */ }
+    if (!res.ok) throw new Error(j?.error?.message || (res.status === 404 ? '이 서버에는 사진 판독 기능이 없습니다 (정적 호스팅).' : `판독 실패 (${res.status})`));
+    read = j.data;
+  } catch (e) {
+    busy();
+    return infoBox('사진을 읽지 못했어요', h('div', h('p', e.message), h('p.small.dim', '사진 판독은 AI 서버(ANTHROPIC_API_KEY 설정)가 필요합니다. 그동안은 게임 안의 공부 타이머를 사용할 수 있어요.')));
+  }
+  busy();
+  const fail = (msg) => infoBox('인증할 수 없어요', h('div', h('img.photo', { src: preview, alt: '' }), h('p', msg)));
+  if (read.confidence === 'low') return fail('글자가 흐리거나 잘려서 확실히 읽지 못했습니다. 날짜와 시간이 선명하게 보이는 원본 스크린샷으로 다시 시도해 주세요.');
+  if (read.edited_suspicion) return fail(`편집된 흔적이 의심됩니다: ${read.edited_suspicion}`);
+  const rv = G.reviewPhoto(read, hash);
+  if (rv.error) return fail(rv.error);
+  const body = h('div',
+    h('div.photorow', h('img.photo', { src: preview, alt: '업로드한 스크린샷' }),
+      h('div', h('p', h('b', rv.date.replace(/-/g, '. ')), rv.age === 0 ? ' (오늘)' : ` (${rv.age}일 전)`),
+        h('p', '총 공부 시간 ', h('b.gold', hms(rv.totalSec))),
+        read.app_guess ? h('p.small.dim', read.app_guess) : null,
+        read.running ? h('p.small.dim', '타이머가 측정 중인 화면입니다. 나중에 다시 올리면 늘어난 만큼 추가됩니다.') : null)),
+    rv.subjects.length ? h('ul.list.small', rv.subjects.map((x) => h('li', h('b', x.name), h('span', hms(x.seconds))))) : null,
+    rv.warn.map((w) => h('p.small.warn', w)),
+    h('p', `이 날 이미 기록된 시간: ${fmtMin(rv.already)}`),
+    h('p', rv.credit > 0 ? h('b.gold', `새로 인정되는 시간: ${fmtMin(rv.credit)}`) : h('b', '새로 인정할 시간이 없습니다 (이미 모두 기록됨).')));
+  const v = await choiceBox(body, rv.credit > 0 ? [['ok', `인증하고 보상 받기 (+${fmtMin(rv.credit)})`, '.primary'], ['no', '취소', '.ghost']] : [['ok', '기록만 남기기', ''], ['no', '닫기', '.ghost']]);
+  if (v !== 'ok') return;
+  const r = G.creditPhoto(rv, hash);
+  if (r?.minutes > 0) {
+    snd('level');
+    const rw = r.reward;
+    await infoBox('사진 인증 완료!', h('div', h('p', `${fmtMin(r.minutes)}의 공부가 인정되었습니다.`),
+      h('div.rewards', h('span.chip', `+${fmt(rw.xp)} XP`), resChip('light', rw.light), resChip('gold', rw.gold), resChip('mana', rw.mana), resChip('stamina', rw.stamina), rw.research ? resChip('research', rw.research) : null),
+      rw.goal ? h('p.gold', '★ 일일 목표 달성 보너스!') : null));
+  }
+  render();
 }
 async function finishFlow() {
   const r = G.finishStudy();

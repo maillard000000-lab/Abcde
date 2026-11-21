@@ -57,7 +57,7 @@ function mapApiError(err) {
  * 구조화된 JSON 결과를 받는 Claude 호출.
  * 긴 출력을 안정적으로 받기 위해 스트리밍 + finalMessage 를 사용한다.
  */
-export async function callStructured({ system, passage, task, schema, maxTokens = 32000, signal }) {
+export async function callStructured({ system, passage, task, schema, maxTokens = 32000, signal, images = [] }) {
   const anthropic = getClient();
   const params = {
     model: MODEL,
@@ -68,6 +68,7 @@ export async function callStructured({ system, passage, task, schema, maxTokens 
       content: [
         // 같은 지문에 대한 여러 호출이 지문 블록까지의 접두부를 공유하므로 캐시 지점을 둔다.
         { type: 'text', text: passage, cache_control: { type: 'ephemeral' } },
+        ...images.map((img) => ({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } })),
         { type: 'text', text: task },
       ],
     }],

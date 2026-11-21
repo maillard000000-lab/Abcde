@@ -61,3 +61,41 @@ test('연구 마법 생성', () => {
   const s = genSpell(st, { level: 5, seed: 'x' });
   assert.ok(s && s.name && s.kind);
 });
+
+// ── 사진 인증 ──
+import * as G from '../public/studyverse/js/game.js';
+import { newState } from '../public/studyverse/js/state.js';
+
+const read = (over = {}) => ({
+  is_study_timer: true, app_guess: '공부 타이머', date: { month: 11, day: 20, weekday: '금' }, total_seconds: 6166, total_text: '1:42:46',
+  subjects: [{ name: '영어', seconds: 368 }, { name: '사회탐구', seconds: 5797 }], running: false, edited_suspicion: '', confidence: 'high', ...over,
+});
+
+test('사진 날짜: 연도 추정 · 요일 검증 · 미래/오래된 날짜 거부', () => {
+  const now = new Date(2026, 10, 21, 9);
+  assert.equal(G.resolvePhotoDate({ month: 11, day: 20, weekday: '금' }, now).key, '2026-11-20');
+  assert.ok(G.resolvePhotoDate({ month: 11, day: 20, weekday: '월' }, now).error);
+  assert.ok(G.resolvePhotoDate({ month: 11, day: 25 }, now).error);
+  assert.ok(G.resolvePhotoDate({ month: 11, day: 10 }, now).error);
+});
+
+test('사진 인증은 그날 이미 기록된 시간을 넘는 만큼만, 같은 사진은 한 번만 인정한다', () => {
+  const d = new Date(); d.setDate(d.getDate() - 1);
+  const W = '일월화수목금토';
+  const r = read({ date: { month: d.getMonth() + 1, day: d.getDate(), weekday: W[d.getDay()] } });
+  const S = newState('테스트');
+  G.setState(S);
+  const key = r.date && `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  S.study.days[key] = 30; // 게임 타이머로 이미 30분
+  const rv = G.reviewPhoto(r, 'h1');
+  assert.equal(rv.photoMin, 102);
+  assert.equal(rv.credit, 72);
+  const res = G.creditPhoto(rv, 'h1');
+  assert.equal(res.minutes, 72);
+  assert.equal(Math.floor(S.study.days[key]), 102);
+  assert.ok(G.reviewPhoto(r, 'h1').error); // 같은 사진
+  assert.equal(G.reviewPhoto(r, 'h2').credit, 0); // 같은 화면을 다시 캡처
+  const later = G.reviewPhoto({ ...r, total_seconds: 7200, subjects: [] }, 'h3');
+  assert.equal(later.credit, 18); // 늘어난 만큼만
+  assert.ok(G.reviewPhoto({ ...r, is_study_timer: false }, 'h4').error);
+});

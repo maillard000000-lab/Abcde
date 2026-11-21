@@ -27,7 +27,7 @@ export function newState(name = '견습생') {
     loot: {},
     study: {
       totalMs: 0, sessions: [], ledger: {}, days: {}, active: null, goalMin: 60,
-      streak: 0, bestStreak: 0, lastDay: null, goals: {}, night: 0, morning: 0, longest: 0, pomodoro: { focus: 25, rest: 5 },
+      streak: 0, bestStreak: 0, lastDay: null, goals: {}, night: 0, morning: 0, longest: 0, pomodoro: { focus: 25, rest: 5 }, photos: [],
     },
     story: { ch: 0, phase: 'intro', start: null, flags: {}, done: [], talk: {} },
     regions: { forest: { restore: 0, exps: 0, boss: false }, greywick: { restore: 0, exps: 0, boss: false }, observatory: { restore: 0, exps: 0, boss: false },

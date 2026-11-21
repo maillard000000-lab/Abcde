@@ -54,8 +54,7 @@ const spellSchema = {
 
 export function studyverseRouter(rateLimit) {
   const r = express.Router();
-  r.use(express.json({ limit: '32kb' }));
-  r.post('/forge', rateLimit, async (req, res) => {
+  r.post('/forge', rateLimit, express.json({ limit: '32kb' }), async (req, res) => {
     try {
       const { kind, level, regions, known, slot } = req.body || {};
       if (!['item', 'spell'].includes(kind)) throw new AnalysisError('invalid', '알 수 없는 창작 종류입니다.', { status: 400 });
@@ -82,5 +81,82 @@ ${slotText ? `- 부위: ${slotText}` : '- 부위는 자유롭게 고르세요.'}
       res.status(status).json({ error: { code: err.code || 'internal', message: err.message || 'AI 창작 중 오류가 발생했습니다.' } });
     }
   });
+
+  // ── 공부 시간 사진 인증: 다른 공부 앱(타이머) 스크린샷을 읽는다 ──
+  r.post('/verify', rateLimit, express.json({ limit: '9mb' }), async (req, res) => {
+    try {
+      const { image, mediaType, today } = req.body || {};
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(mediaType)) throw new AnalysisError('invalid', 'JPEG, PNG, WebP 이미지만 인증할 수 있습니다.', { status: 400 });
+      if (typeof image !== 'string' || image.length < 100 || image.length > 8_000_000 || !/^[A-Za-z0-9+/=]+$/.test(image)) {
+        throw new AnalysisError('invalid', '이미지 데이터가 올바르지 않거나 너무 큽니다.', { status: 400 });
+      }
+      const todayText = typeof today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(today) ? today : '';
+      const { data } = await callStructured({
+        system: VERIFY_SYSTEM,
+        passage: VERIFY_GUIDE,
+        images: [{ mediaType, data: image }],
+        task: `위 스크린샷을 판독해 주세요.${todayText ? ` (참고: 사용자의 오늘 날짜는 ${todayText}입니다. 연도는 화면에 보이지 않으면 추측하지 말고 월·일만 적으세요.)` : ''}`,
+        schema: verifySchema,
+        maxTokens: 8000,
+      });
+      res.json({ data: sanitizeVerify(data) });
+    } catch (err) {
+      const status = err.status || 500;
+      res.status(status).json({ error: { code: err.code || 'internal', message: err.message || '사진 판독 중 오류가 발생했습니다.' } });
+    }
+  });
   return r;
+}
+
+const VERIFY_SYSTEM = `당신은 공부 시간 기록 앱(열품타, 공부 타이머, 스톱워치형 플래너 등)의 스크린샷에서 숫자를 정확히 옮겨 적는 판독기입니다.
+화면에 실제로 보이는 값만 적고, 보이지 않거나 흐릿한 값은 추측하지 말고 null 로 둡니다. 사용자의 이익을 위해 값을 부풀리지 마십시오.`;
+const VERIFY_GUIDE = `[판독 규칙]
+- is_study_timer: 공부 시간을 기록하는 앱/타이머 화면이면 true. 게임, 일반 사진, 시계 앱, 문서 등은 false.
+- date: 화면에 표시된 기록 날짜(예: "11. 20 (금)" → month 11, day 20, weekday "금"). 요일은 한 글자 한국어(일 월 화 수 목 금 토)로. 날짜가 없으면 null.
+- total_seconds: 그날의 총 공부 시간으로 가장 크게 표시된 값(H:MM:SS → 초). 총합이 없으면 null.
+- total_text: total_seconds 를 읽은 원문 그대로.
+- subjects: 과목/항목별 시간 목록(이름과 초). 0초인 과목도 포함해도 됩니다.
+- running: 타이머가 지금 측정 중으로 보이면 true.
+- edited_suspicion: 숫자가 겹치거나 글꼴이 다르거나 편집 흔적이 보이면 그 이유를 짧게, 없으면 빈 문자열.
+- confidence: 판독 확신도 high / medium / low.`;
+const verifySchema = {
+  type: 'object', additionalProperties: false,
+  required: ['is_study_timer', 'app_guess', 'date', 'total_seconds', 'total_text', 'subjects', 'running', 'edited_suspicion', 'confidence'],
+  properties: {
+    is_study_timer: { type: 'boolean' },
+    app_guess: { type: 'string' },
+    date: {
+      anyOf: [{ type: 'null' }, {
+        type: 'object', additionalProperties: false, required: ['month', 'day', 'weekday'],
+        properties: { month: { type: 'integer' }, day: { type: 'integer' }, weekday: { anyOf: [{ type: 'string' }, { type: 'null' }] } },
+      }],
+    },
+    total_seconds: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+    total_text: { type: 'string' },
+    subjects: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: false, required: ['name', 'seconds'], properties: { name: { type: 'string' }, seconds: { type: 'integer' } } },
+    },
+    running: { type: 'boolean' },
+    edited_suspicion: { type: 'string' },
+    confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+  },
+};
+function sanitizeVerify(d) {
+  const int = (v, max) => (Number.isInteger(v) && v >= 0 && v <= max ? v : null);
+  const date = d?.date && int(d.date.month, 12) && int(d.date.day, 31)
+    ? { month: d.date.month, day: d.date.day, weekday: '일월화수목금토'.includes(d.date.weekday || 'x') && String(d.date.weekday).length === 1 ? d.date.weekday : null }
+    : null;
+  return {
+    is_study_timer: Boolean(d?.is_study_timer),
+    app_guess: String(d?.app_guess || '').slice(0, 40),
+    date,
+    total_seconds: int(d?.total_seconds, 24 * 3600),
+    total_text: String(d?.total_text || '').slice(0, 20),
+    subjects: (Array.isArray(d?.subjects) ? d.subjects : []).slice(0, 20)
+      .map((x) => ({ name: String(x?.name || '').slice(0, 20), seconds: int(x?.seconds, 24 * 3600) || 0 })),
+    running: Boolean(d?.running),
+    edited_suspicion: String(d?.edited_suspicion || '').slice(0, 120),
+    confidence: ['high', 'medium', 'low'].includes(d?.confidence) ? d.confidence : 'low',
+  };
 }
