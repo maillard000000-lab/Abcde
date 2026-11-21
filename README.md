@@ -75,6 +75,24 @@ test/             문장 분리기 테스트 (npm test)
 
 이 저장소에는 공부 시간과 연동되는 픽셀 아트 판타지 RPG · 마법학교 경영 게임도 들어 있습니다. 서버를 실행한 뒤 `http://localhost:3000/studyverse/` 로 접속하세요. 정적 파일만으로도 동작하므로 `public/studyverse/` 폴더를 아무 정적 호스팅에 올려도 플레이할 수 있습니다(AI 창작 기능만 빠집니다).
 
+## 실행하기
+
+```bash
+npm install
+npm start                          # http://localhost:3000/studyverse/
+# 사진 인증 · AI 창작까지 쓰려면:
+ANTHROPIC_API_KEY=sk-ant-... npm start
+```
+
+같은 Wi-Fi의 휴대폰에서는 `http://<컴퓨터 IP>:3000/studyverse/` 로 플레이할 수 있지만, **앱 설치는 HTTPS 주소에서만** 됩니다(브라우저 규칙). 휴대폰에 설치하려면 서버를 HTTPS로 배포하세요(Render, Railway, Fly.io 등 Node 호스팅 — 시작 명령 `npm start`, 환경 변수 `ANTHROPIC_API_KEY`). 사진 인증이 필요 없다면 `public/studyverse/` 폴더만 GitHub Pages·Netlify 같은 정적 호스팅에 올려도 됩니다.
+
+## 앱으로 설치 (PWA)
+
+- **안드로이드 / PC (Chrome·Edge)**: 설정 메뉴의 「📲 앱으로 설치하기」 버튼, 또는 주소창의 설치 아이콘 / 메뉴 → 「앱 설치」.
+- **아이폰 / 아이패드 (Safari)**: 공유 버튼 → 「홈 화면에 추가」.
+
+설치하면 홈 화면 아이콘으로 주소창 없이 전체 화면 실행되고, 서비스 워커(`sw.js`)가 파일을 캐시해 인터넷 없이도 플레이할 수 있습니다(사진 인증·AI 창작은 온라인 필요). 온라인일 때는 항상 최신 파일을 받습니다. 아이콘은 `node tools/make-icons.mjs` 로 다시 만들 수 있습니다.
+
 ## 주요 시스템
 
 | 메뉴 | 내용 |

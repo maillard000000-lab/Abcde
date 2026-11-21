@@ -743,6 +743,7 @@ function vSettings() {
       num('자리 비움 확인 기준', st.awayConfirmMin, 3, 120, (v) => { st.awayConfirmMin = v; }),
       h('p.small.dim', '타이머가 켜진 채 앱을 오래 떠나 있었다면, 돌아왔을 때 그 시간을 공부로 인정할지 물어봅니다.')),
     section('게임', chk('효과음', 'sound'), chk('움직임 줄이기 (날씨 입자 끔)', 'reduceMotion'), chk('자동 전투 기본값', 'autoBattle')),
+    installSection(),
     section('AI 창작 (선택)',
       h('p.small', 'AI 서버가 연결되면 연구실과 등불 공방에서 AI가 세계관에 맞춘 새 마법과 장비를 창작합니다. 연결되지 않아도 모든 기본 플레이는 정상 작동합니다.'),
       h('p.small.dim', `서버 상태: ${hooks.aiStatus()}`),
@@ -755,6 +756,18 @@ function vSettings() {
         btn('처음부터 다시 시작', async () => { if (await confirmBox('모든 진행 상황이 삭제됩니다. 정말 처음부터 시작할까요?') && await confirmBox('되돌릴 수 없습니다. 백업을 내보냈나요? 계속하면 삭제합니다.')) { wipe(); location.reload(); } }, '.danger'))),
     section('정보', h('p.small.dim', 'STUDYVERSE : 지식의 세계 — 네가 공부한 만큼, 세계가 깨어난다.'), h('p.small.dim', '글꼴: Galmuri (SIL Open Font License)')),
   );
+}
+
+function installSection() {
+  const st = hooks.installState?.();
+  const body = {
+    installed: h('p.gold', '앱으로 설치되어 실행 중입니다.'),
+    ready: h('div', h('p.small', '홈 화면에 아이콘이 생기고, 주소창 없이 전체 화면으로 실행됩니다. 인터넷이 끊겨도 플레이할 수 있어요.'), h('div.acts', btn('📲 앱으로 설치하기', () => hooks.installApp(), '.primary'))),
+    ios: h('ul.small', h('li', 'Safari 아래쪽(또는 위쪽)의 공유 버튼 □↑ 을 누르세요.'), h('li', '「홈 화면에 추가」를 누르면 앱처럼 설치됩니다.'), h('li', 'Safari에서 열어야 합니다 (다른 앱 안의 브라우저에서는 안 될 수 있어요).')),
+    insecure: h('p.small.warn', '앱 설치는 https:// 주소(또는 이 기기의 localhost)에서만 가능합니다. 서버를 HTTPS로 배포한 주소로 접속해 주세요.'),
+    manual: h('ul.small', h('li', 'Chrome/Edge: 주소창 오른쪽의 설치 아이콘(⊕) 또는 메뉴 ⋮ → 「앱 설치」/「홈 화면에 추가」'), h('li', '설치 버튼이 보이지 않으면 페이지를 한 번 새로고침해 보세요.')),
+  }[st] || null;
+  return section('앱 설치', body, h('p.small.dim', '설치해도 진행 상황은 이 기기의 같은 브라우저 저장소를 그대로 씁니다. 다른 기기로 옮길 때는 아래 「백업 파일 내보내기」를 사용하세요.'));
 }
 
 // ───────────────────────── 모달 ─────────────────────────

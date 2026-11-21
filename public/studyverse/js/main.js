@@ -308,7 +308,31 @@ function initState(s) {
   G.bootstrap();
   save(s);
 }
+// ───────────────────────── 앱 설치 (PWA) ─────────────────────────
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; if (ui.view === 'settings') render(); });
+window.addEventListener('appinstalled', () => { installEvt = null; G.S && G.toast('앱이 설치되었습니다! 홈 화면에서 실행하세요.', 'level'); });
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('service worker', e));
+}
+function installState() {
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  if (standalone) return 'installed';
+  if (installEvt) return 'ready';
+  if (/iphone|ipad|ipod/i.test(navigator.userAgent)) return 'ios';
+  if (!window.isSecureContext) return 'insecure';
+  return 'manual';
+}
+async function installApp() {
+  if (!installEvt) return;
+  installEvt.prompt();
+  const r = await installEvt.userChoice;
+  if (r.outcome === 'accepted') installEvt = null;
+  render();
+}
+
 setHooks({
+  installState, installApp,
   portraitFor, playerOpts, studentOpts, weather, interact, startExplore, act, nextEnc, endExplore,
   near: () => scenes.school.near, aiStatus: () => aiState, aiConfigured: () => aiOk,
   replaceState: (ns) => { initState(ns); render(); G.toast('백업을 불러왔습니다.', 'level'); },
