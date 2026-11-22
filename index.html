@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>소리숲 — YouTube 뮤직 플레이어</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f0f0f; --panel:#181818; --panel2:#212121; --line:#2a2a2a;
+    --text:#f1f1f1; --muted:#aaa; --accent:#ff3b5c; --accent2:#ff7a59;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:'Noto Sans KR',system-ui,sans-serif}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  input{font:inherit}
+  .app{display:grid;grid-template-columns:220px 1fr;grid-template-rows:1fr auto;height:100vh}
+  /* sidebar */
+  aside{background:#000;padding:20px 12px;border-right:1px solid var(--line);overflow:auto}
+  .logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:20px;padding:0 8px 20px}
+  .logo i{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:grid;place-items:center;font-style:normal;font-size:14px}
+  .nav button{display:flex;width:100%;gap:12px;align-items:center;padding:10px 12px;border-radius:8px;color:var(--muted)}
+  .nav button.on,.nav button:hover{background:var(--panel2);color:var(--text)}
+  .side-h{font-size:12px;color:var(--muted);margin:22px 12px 8px}
+  .pl-item{display:flex;justify-content:space-between;align-items:center;width:100%;padding:8px 12px;border-radius:8px;color:var(--muted);font-size:14px;text-align:left}
+  .pl-item:hover{background:var(--panel2);color:var(--text)}
+  /* main */
+  main{overflow:auto;padding:24px 28px 40px}
+  .search{display:flex;gap:8px;margin-bottom:24px}
+  .search input{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:24px;padding:11px 18px;outline:none}
+  .search input:focus{border-color:#555}
+  .btn{background:var(--text);color:#000;border-radius:20px;padding:9px 18px;font-weight:500;white-space:nowrap}
+  .btn.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+  h2{font-size:22px;margin:8px 0 16px}
+  .hint{color:var(--muted);font-size:14px;line-height:1.7}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:18px}
+  .card{cursor:pointer}
+  .card .th{aspect-ratio:1;border-radius:8px;background:#222 center/cover;position:relative;overflow:hidden}
+  .card .th::after{content:'▶';position:absolute;inset:auto 8px 8px auto;width:36px;height:36px;border-radius:50%;
+    background:rgba(0,0,0,.7);display:grid;place-items:center;opacity:0;transition:.15s}
+  .card:hover .th::after{opacity:1}
+  .card .t{font-size:14px;margin-top:8px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .card .c{font-size:12px;color:var(--muted);margin-top:3px}
+  .card .acts{display:flex;gap:6px;margin-top:6px}
+  .card .acts button{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:12px;padding:3px 9px}
+  .card .acts button:hover{color:var(--text);border-color:#666}
+  .row{display:flex;align-items:center;gap:12px;padding:8px;border-radius:8px}
+  .row:hover{background:var(--panel)}
+  .row.now{background:var(--panel2)}
+  .row img{width:48px;height:48px;object-fit:cover;border-radius:4px;background:#222}
+  .row .meta{flex:1;min-width:0}
+  .row .meta div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .meta .c{font-size:12px;color:var(--muted)}
+  .row .x{color:var(--muted);padding:6px 8px;border-radius:6px}
+  .row .x:hover{background:var(--panel2);color:var(--text)}
+  /* now playing */
+  .np{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:28px;align-items:start}
+  .vid{width:100%;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden;min-height:200px}
+  .vid iframe,#ytp{width:100%;height:100%}
+  .np-title{font-size:22px;font-weight:700;margin:16px 0 4px}
+  .np-ch{color:var(--muted)}
+  /* player bar */
+  .bar{grid-column:1/-1;background:var(--panel);border-top:1px solid var(--line);padding:0 16px 10px;display:grid;
+    grid-template-columns:1fr auto 1fr;align-items:center;gap:16px}
+  .seek{grid-column:1/-1;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);padding-top:6px}
+  input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;width:100%;height:16px}
+  input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--accent) var(--p,0%),#444 var(--p,0%))}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#fff;margin-top:-4.5px}
+  input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:#444}
+  input[type=range]::-moz-range-progress{height:4px;background:var(--accent)}
+  input[type=range]::-moz-range-thumb{width:13px;height:13px;border:0;border-radius:50%;background:#fff}
+  .cur{display:flex;align-items:center;gap:12px;min-width:0}
+  .cur img{width:48px;height:48px;border-radius:4px;object-fit:cover;background:#222}
+  .cur .meta{min-width:0}
+  .cur .meta div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+  .cur .meta .c{font-size:12px;color:var(--muted)}
+  .ctl{display:flex;align-items:center;gap:10px}
+  .ctl button{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:18px;color:var(--muted)}
+  .ctl button:hover{color:var(--text)}
+  .ctl button.on{color:var(--accent)}
+  .ctl .play{width:48px;height:48px;background:#fff;color:#000;font-size:20px}
+  .ctl .play:hover{color:#000;transform:scale(1.05)}
+  .right{display:flex;justify-content:flex-end;align-items:center;gap:8px;color:var(--muted)}
+  .right input{width:110px}
+  .toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:#fff;color:#000;padding:10px 18px;border-radius:8px;
+    font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:9}
+  .toast.show{opacity:1}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;place-items:center;z-index:8}
+  .modal.show{display:grid}
+  .modal .box{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:22px;width:min(440px,92vw)}
+  .modal input{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:10px 12px;margin:10px 0}
+  .modal .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+  .empty{color:var(--muted);padding:30px 0;text-align:center}
+  .mob-nav{display:none}
+  @media (max-width:760px){
+    .app{grid-template-columns:1fr;grid-template-rows:auto 1fr auto}
+    aside{display:none}
+    .mob-nav{display:flex;gap:6px;padding:10px 12px;background:#000;border-bottom:1px solid var(--line);overflow-x:auto}
+    .mob-nav button{padding:7px 14px;border-radius:16px;background:var(--panel2);color:var(--muted);white-space:nowrap;font-size:14px}
+    .mob-nav button.on{background:#fff;color:#000}
+    main{padding:16px 14px 30px}
+    .np{grid-template-columns:1fr}
+    .bar{grid-template-columns:1fr auto}
+    .right{display:none}
+    .grid{grid-template-columns:repeat(2,1fr);gap:12px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="logo"><i>▶</i>소리숲</div>
+    <div class="nav" id="nav">
+      <button data-v="home" class="on">⌂ 홈 · 검색</button>
+      <button data-v="now">♪ 지금 재생 중</button>
+      <button data-v="queue">☰ 재생 대기열</button>
+      <button data-v="library">♡ 보관함</button>
+      <button data-v="settings">⚙ 설정</button>
+    </div>
+    <div class="side-h">내 플레이리스트</div>
+    <div id="sidePl"></div>
+    <button class="pl-item" id="newPl">＋ 새 플레이리스트</button>
+  </aside>
+
+  <div class="mob-nav" id="mobNav">
+    <button data-v="home" class="on">홈</button>
+    <button data-v="now">재생 중</button>
+    <button data-v="queue">대기열</button>
+    <button data-v="library">보관함</button>
+    <button data-v="settings">설정</button>
+  </div>
+
+  <main id="main">
+    <!-- HOME -->
+    <section data-view="home">
+      <form class="search" id="searchForm">
+        <input id="q" placeholder="노래, 아티스트 검색 · 또는 YouTube 링크/재생목록 링크 붙여넣기" autocomplete="off">
+        <button class="btn">검색</button>
+      </form>
+      <div id="results">
+        <h2>시작하기</h2>
+        <p class="hint">
+          • YouTube <b>동영상 링크</b>나 <b>재생목록 링크</b>를 붙여넣으면 바로 재생돼요.<br>
+          • 노래 제목으로 <b>검색</b>하려면 설정에서 YouTube Data API 키를 넣어 주세요 (무료).<br>
+          • 재생 중인 곡은 ♡로 보관함에 담고, 플레이리스트로 정리할 수 있어요. 모든 정보는 이 브라우저에만 저장돼요.
+        </p>
+      </div>
+    </section>
+
+    <!-- NOW PLAYING -->
+    <section data-view="now" hidden>
+      <div class="np">
+        <div>
+          <div class="vid"><div id="ytp"></div></div>
+          <div class="np-title" id="npTitle">재생 중인 곡이 없어요</div>
+          <div class="np-ch" id="npCh"></div>
+          <div style="display:flex;gap:8px;margin-top:14px">
+            <button class="btn ghost" id="likeBtn">♡ 보관함에 담기</button>
+            <button class="btn ghost" id="addToPlBtn">＋ 플레이리스트에 추가</button>
+          </div>
+        </div>
+        <div>
+          <h2 style="font-size:17px">다음 곡</h2>
+          <div id="upNext"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- QUEUE -->
+    <section data-view="queue" hidden>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2>재생 대기열</h2>
+        <div style="display:flex;gap:8px">
+          <button class="btn ghost" id="saveQueue">플레이리스트로 저장</button>
+          <button class="btn ghost" id="clearQueue">비우기</button>
+        </div>
+      </div>
+      <div id="queueList"></div>
+    </section>
+
+    <!-- LIBRARY -->
+    <section data-view="library" hidden>
+      <h2 id="libTitle">보관함</h2>
+      <div style="display:flex;gap:8px;margin-bottom:14px" id="libActs">
+        <button class="btn" id="playLib">▶ 전체 재생</button>
+        <button class="btn ghost" id="shufLib">⤮ 셔플 재생</button>
+        <button class="btn ghost" id="delPl" hidden>플레이리스트 삭제</button>
+      </div>
+      <div id="libList"></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section data-view="settings" hidden>
+      <h2>설정</h2>
+      <p class="hint">검색 기능은 YouTube Data API v3 키가 필요해요. 키 없이도 링크 붙여넣기로는 모두 재생돼요.</p>
+      <p class="hint">발급 방법: Google Cloud Console → 새 프로젝트 → ‘YouTube Data API v3’ 사용 설정 → 사용자 인증 정보 → API 키 만들기. 하루 무료 사용량 안에서 검색 약 100회가 가능해요.</p>
+      <div style="display:flex;gap:8px;max-width:560px">
+        <input id="apiKey" class="search" style="flex:1;margin:0;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:10px 12px" placeholder="API 키 붙여넣기">
+        <button class="btn" id="saveKey">저장</button>
+      </div>
+      <h2 style="margin-top:30px;font-size:17px">데이터</h2>
+      <button class="btn ghost" id="exportBtn">보관함 내보내기(복사)</button>
+      <button class="btn ghost" id="importBtn">가져오기</button>
+    </section>
+  </main>
+
+  <!-- PLAYER BAR -->
+  <div class="bar">
+    <div class="seek">
+      <span id="tCur">0:00</span>
+      <input type="range" id="seek" min="0" max="1000" value="0">
+      <span id="tDur">0:00</span>
+    </div>
+    <div class="cur" id="curBox" style="cursor:pointer">
+      <img id="curImg" alt="">
+      <div class="meta"><div id="curTitle">—</div><div class="c" id="curCh"></div></div>
+    </div>
+    <div class="ctl">
+      <button id="shuf" title="셔플">⤮</button>
+      <button id="prev" title="이전">⏮</button>
+      <button id="play" class="play" title="재생/일시정지">▶</button>
+      <button id="next" title="다음">⏭</button>
+      <button id="rep" title="반복">↻</button>
+    </div>
+    <div class="right">
+      <span id="volIco">🔊</span>
+      <input type="range" id="vol" min="0" max="100" value="80">
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modal"><div class="box">
+  <div id="mTitle" style="font-weight:700"></div>
+  <div id="mBody"></div>
+  <div class="acts"><button class="btn ghost" id="mCancel">취소</button><button class="btn" id="mOk">확인</button></div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- storage ---------- */
+const S = {
+  get(k, d){ try{ const v = localStorage.getItem('sorisup_'+k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('sorisup_'+k, JSON.stringify(v)); }catch(e){} }
+};
+let liked = S.get('liked', []);          // [{id,title,ch,th}]
+let playlists = S.get('playlists', {});  // {name:[tracks]}
+let queue = S.get('queue', []);
+let qi = S.get('qi', 0);
+let shuffle = false, repeat = 0;         // 0 off, 1 all, 2 one
+let apiKey = S.get('apiKey', '');
+let libView = null;                      // null = liked, else playlist name
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const thumb = id => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+const save = () => { S.set('liked', liked); S.set('playlists', playlists); S.set('queue', queue); S.set('qi', qi); };
+
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1800); }
+function modal(title, html, onOk){
+  $('#mTitle').textContent=title; $('#mBody').innerHTML=html; $('#modal').classList.add('show');
+  const inp=$('#mBody input'); if(inp) setTimeout(()=>inp.focus(),50);
+  $('#mOk').onclick=()=>{ if(onOk(inp?inp.value.trim():null)!==false) $('#modal').classList.remove('show'); };
+  $('#mCancel').onclick=()=>$('#modal').classList.remove('show');
+}
+
+/* ---------- views ---------- */
+function show(v){
+  document.querySelectorAll('[data-view]').forEach(s=>s.hidden = s.dataset.view!==v);
+  document.querySelectorAll('#nav button,#mobNav button').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
+  if(v==='queue') renderQueue();
+  if(v==='library') renderLib();
+  if(v==='settings') $('#apiKey').value = apiKey;
+  $('#main').scrollTop = 0;
+}
+document.querySelectorAll('#nav button,#mobNav button').forEach(b=>b.onclick=()=>{ if(b.dataset.v==='library') libView=null; show(b.dataset.v); });
+$('#curBox').onclick=()=>show('now');
+
+/* ---------- YouTube player (official IFrame API) ---------- */
+let player, ready=false, pendingPlay=null;
+const tag=document.createElement('script'); tag.src='https://www.youtube.com/iframe_api'; document.head.appendChild(tag);
+window.onYouTubeIframeAPIReady = () => {
+  player = new YT.Player('ytp', {
+    playerVars:{ playsinline:1, rel:0, modestbranding:1 },
+    events:{
+      onReady:()=>{ ready=true; player.setVolume(+$('#vol').value);
+        if(pendingPlay){ pendingPlay(); pendingPlay=null; } else if(queue[qi]) { player.cueVideoById(queue[qi].id); updateNow(); } },
+      onStateChange:e=>{
+        $('#play').textContent = e.data===YT.PlayerState.PLAYING ? '⏸' : '▶';
+        if(e.data===YT.PlayerState.PLAYING) fillMeta();
+        if(e.data===YT.PlayerState.ENDED) onEnded();
+        if('mediaSession' in navigator) navigator.mediaSession.playbackState = e.data===1?'playing':'paused';
+      },
+      onError:()=>{ toast('이 영상은 외부 재생이 막혀 있어 건너뛸게요'); setTimeout(next, 800); }
+    }
+  });
+};
+function loadCur(autoplay=true){
+  const t=queue[qi]; if(!t) return;
+  const go=()=>{ autoplay ? player.loadVideoById(t.id) : player.cueVideoById(t.id); };
+  ready ? go() : (pendingPlay=go);
+  save(); updateNow();
+}
+function fillMeta(){ // fill title/channel for tracks added by link only
+  const t=queue[qi]; if(!t||!player.getVideoData) return;
+  const d=player.getVideoData();
+  if(d && d.video_id===t.id && (!t.title || t.title===t.id)){ t.title=d.title; t.ch=d.author; save(); updateNow(); }
+}
+function updateNow(){
+  const t=queue[qi];
+  $('#curTitle').textContent = t ? (t.title||t.id) : '—';
+  $('#curCh').textContent = t ? (t.ch||'') : '';
+  $('#curImg').src = t ? thumb(t.id) : '';
+  $('#npTitle').textContent = t ? (t.title||t.id) : '재생 중인 곡이 없어요';
+  $('#npCh').textContent = t ? (t.ch||'') : '';
+  $('#likeBtn').textContent = t && liked.some(x=>x.id===t.id) ? '♥ 보관함에 있음' : '♡ 보관함에 담기';
+  renderUpNext(); if(!$('[data-view=queue]').hidden) renderQueue();
+  if(t && 'mediaSession' in navigator){
+    navigator.mediaSession.metadata = new MediaMetadata({ title:t.title||t.id, artist:t.ch||'', artwork:[{src:thumb(t.id),sizes:'480x360',type:'image/jpeg'}] });
+  }
+  document.title = t ? `${t.title||t.id} — 소리숲` : '소리숲 — YouTube 뮤직 플레이어';
+}
+function playList(list, start=0, shuf=false){
+  queue = list.map(x=>({...x}));
+  if(shuf){ for(let i=queue.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [queue[i],queue[j]]=[queue[j],queue[i]]; } start=0; }
+  qi=start; loadCur(); show('now');
+}
+function playNow(t){ queue.splice(qi+ (queue.length?1:0), 0, t); if(queue.length>1) qi++; loadCur(); }
+function addQueue(t){ queue.push(t); save(); renderUpNext(); toast('대기열에 추가했어요'); if(queue.length===1){ qi=0; loadCur(false);} }
+function next(){
+  if(!queue.length) return;
+  if(shuffle && queue.length>1){ let n; do{ n=Math.floor(Math.random()*queue.length);}while(n===qi); qi=n; }
+  else if(qi < queue.length-1) qi++;
+  else if(repeat===1) qi=0;
+  else { toast('대기열의 마지막 곡이에요'); return; }
+  loadCur();
+}
+function prev(){
+  if(ready && player.getCurrentTime && player.getCurrentTime()>4){ player.seekTo(0,true); return; }
+  if(qi>0){ qi--; loadCur(); } else if(ready) player.seekTo(0,true);
+}
+function onEnded(){ if(repeat===2){ player.seekTo(0,true); player.playVideo(); } else next(); }
+
+$('#play').onclick=()=>{
+  if(!ready||!queue.length) return;
+  player.getPlayerState()===YT.PlayerState.PLAYING ? player.pauseVideo() : player.playVideo();
+};
+$('#next').onclick=next; $('#prev').onclick=prev;
+$('#shuf').onclick=()=>{ shuffle=!shuffle; $('#shuf').classList.toggle('on',shuffle); toast(shuffle?'셔플 켜짐':'셔플 꺼짐'); };
+$('#rep').onclick=()=>{ repeat=(repeat+1)%3; $('#rep').classList.toggle('on',repeat>0); $('#rep').textContent = repeat===2?'🔂':'↻'; toast(['반복 꺼짐','전체 반복','한 곡 반복'][repeat]); };
+const setP = el => el.style.setProperty('--p', (el.value/el.max*100)+'%');
+$('#vol').oninput=e=>{ setP(e.target); if(ready) player.setVolume(+e.target.value); $('#volIco').textContent = e.target.value==0?'🔇':'🔊'; };
+setP($('#vol'));
+let seeking=false;
+$('#seek').oninput=e=>{ seeking=true; setP(e.target); };
+$('#seek').onchange=e=>{ seeking=false; if(ready&&player.getDuration) player.seekTo(player.getDuration()*e.target.value/1000,true); };
+const fmt = s => { s=Math.floor(s||0); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
+setInterval(()=>{
+  if(!ready||!player.getDuration) return;
+  const d=player.getDuration()||0, c=player.getCurrentTime()||0;
+  $('#tCur').textContent=fmt(c); $('#tDur').textContent=fmt(d);
+  if(!seeking && d){ $('#seek').value = c/d*1000; setP($('#seek')); }
+}, 500);
+if('mediaSession' in navigator){
+  try{
+    navigator.mediaSession.setActionHandler('play',()=>player&&player.playVideo());
+    navigator.mediaSession.setActionHandler('pause',()=>player&&player.pauseVideo());
+    navigator.mediaSession.setActionHandler('nexttrack',next);
+    navigator.mediaSession.setActionHandler('previoustrack',prev);
+  }catch(e){}
+}
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT') return;
+  if(e.code==='Space'){ e.preventDefault(); $('#play').click(); }
+  if(e.code==='ArrowRight' && e.shiftKey) next();
+  if(e.code==='ArrowLeft' && e.shiftKey) prev();
+});
+
+/* ---------- search & links ---------- */
+function parseInput(s){
+  try{
+    const u=new URL(s);
+    const list=u.searchParams.get('list');
+    let v=u.searchParams.get('v');
+    if(u.hostname.includes('youtu.be')) v=u.pathname.slice(1);
+    if(/\/(shorts|embed|live)\//.test(u.pathname)) v=u.pathname.split('/')[2];
+    return { v, list };
+  }catch(e){
+    if(/^[\w-]{11}$/.test(s)) return { v:s };
+    return null;
+  }
+}
+$('#searchForm').onsubmit=async e=>{
+  e.preventDefault();
+  const q=$('#q').value.trim(); if(!q) return;
+  const p=parseInput(q);
+  if(p && (p.v||p.list)){
+    if(p.list) return loadYtPlaylist(p.list, p.v);
+    const t={id:p.v,title:'',ch:''}; queue.length?playNow(t):playList([t]); show('now'); $('#q').value=''; return;
+  }
+  if(!apiKey){ $('#results').innerHTML='<p class="hint">제목 검색은 API 키가 필요해요. <a href="#" style="color:var(--accent)" onclick="show(\'settings\');return false">설정에서 키 넣기</a> — 또는 YouTube 링크를 붙여넣어 보세요.</p>'; return; }
+  $('#results').innerHTML='<p class="hint">검색 중…</p>';
+  try{
+    const r=await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=24&q=${encodeURIComponent(q)}&key=${apiKey}`);
+    const j=await r.json(); if(j.error) throw new Error(j.error.message);
+    const items=j.items.map(it=>({id:it.id.videoId,title:decodeHtml(it.snippet.title),ch:decodeHtml(it.snippet.channelTitle)}));
+    renderResults(`‘${esc(q)}’ 검색 결과`, items);
+  }catch(err){ $('#results').innerHTML=`<p class="hint">검색에 실패했어요: ${esc(err.message)}</p>`; }
+};
+function decodeHtml(s){ const t=document.createElement('textarea'); t.innerHTML=s; return t.value; }
+async function loadYtPlaylist(listId, startV){
+  if(apiKey){
+    try{
+      let items=[], token='';
+      do{
+        const r=await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${listId}&key=${apiKey}${token?'&pageToken='+token:''}`);
+        const j=await r.json(); if(j.error) throw new Error(j.error.message);
+        items=items.concat(j.items.filter(i=>i.snippet.resourceId.videoId).map(i=>({id:i.snippet.resourceId.videoId,title:i.snippet.title,ch:i.snippet.videoOwnerChannelTitle||''})));
+        token=j.nextPageToken;
+      }while(token && items.length<200);
+      const start=Math.max(0, items.findIndex(x=>x.id===startV));
+      playList(items, start); $('#q').value=''; toast(`${items.length}곡을 불러왔어요`); return;
+    }catch(e){ toast('재생목록 불러오기 실패 — 플레이어로 직접 재생할게요'); }
+  }
+  // without API key: let the YouTube player load the list, then read the ids back
+  const go=()=>{ player.loadPlaylist({list:listId,listType:'playlist'});
+    setTimeout(()=>{ const ids=player.getPlaylist()||[]; if(ids.length){ player.stopVideo(); playList(ids.map(id=>({id,title:'',ch:''})), Math.max(0,ids.indexOf(startV))); toast(`${ids.length}곡을 불러왔어요`);} }, 2500); };
+  ready?go():(pendingPlay=go); show('now'); $('#q').value='';
+}
+function renderResults(title, items){
+  window._res=items;
+  $('#results').innerHTML=`<h2>${title}</h2><div class="grid">`+items.map((t,i)=>`
+    <div class="card"><div class="th" style="background-image:url(${thumb(t.id)})" data-i="${i}"></div>
+      <div class="t">${esc(t.title)}</div><div class="c">${esc(t.ch)}</div>
+      <div class="acts"><button data-a="q" data-i="${i}">＋대기열</button><button data-a="l" data-i="${i}">♡</button><button data-a="p" data-i="${i}">플리＋</button></div>
+    </div>`).join('')+'</div>';
+}
+$('#results').onclick=e=>{
+  const el=e.target.closest('[data-i]'); if(!el) return; const t={...window._res[+el.dataset.i]};
+  if(el.dataset.a==='q') addQueue(t);
+  else if(el.dataset.a==='l') toggleLike(t);
+  else if(el.dataset.a==='p') pickPlaylist(t);
+  else { queue.length?playNow(t):playList([t]); show('now'); }
+};
+
+/* ---------- library & playlists ---------- */
+function toggleLike(t){
+  const i=liked.findIndex(x=>x.id===t.id);
+  if(i>=0){ liked.splice(i,1); toast('보관함에서 뺐어요'); } else { liked.unshift({id:t.id,title:t.title,ch:t.ch}); toast('보관함에 담았어요'); }
+  save(); updateNow();
+}
+$('#likeBtn').onclick=()=>{ const t=queue[qi]; if(t) toggleLike(t); };
+function pickPlaylist(t){
+  const names=Object.keys(playlists);
+  modal('플레이리스트에 추가', (names.length?'<div class="hint">기존: '+names.map(esc).join(', ')+'</div>':'')+'<input placeholder="플레이리스트 이름 (없으면 새로 만들어요)">', name=>{
+    if(!name) return false;
+    playlists[name]=playlists[name]||[];
+    if(!playlists[name].some(x=>x.id===t.id)) playlists[name].push({id:t.id,title:t.title,ch:t.ch});
+    save(); renderSide(); toast(`‘${name}’에 추가했어요`);
+  });
+}
+$('#addToPlBtn').onclick=()=>{ const t=queue[qi]; if(t) pickPlaylist(t); };
+$('#newPl').onclick=()=>modal('새 플레이리스트','<input placeholder="이름">',name=>{ if(!name) return false; playlists[name]=playlists[name]||[]; save(); renderSide(); });
+function renderSide(){
+  $('#sidePl').innerHTML=Object.keys(playlists).map(n=>`<button class="pl-item" data-n="${esc(n)}"><span>${esc(n)}</span><span>${playlists[n].length}</span></button>`).join('');
+}
+$('#sidePl').onclick=e=>{ const b=e.target.closest('[data-n]'); if(!b) return; libView=b.dataset.n; show('library'); };
+function libItems(){ return libView===null ? liked : (playlists[libView]||[]); }
+function rowHtml(t,i,extra=''){
+  return `<div class="row ${extra}" data-i="${i}"><img src="${thumb(t.id)}" alt=""><div class="meta"><div>${esc(t.title||t.id)}</div><div class="c">${esc(t.ch||'')}</div></div><button class="x" data-del="${i}" title="삭제">✕</button></div>`;
+}
+function renderLib(){
+  const items=libItems();
+  $('#libTitle').textContent = libView===null ? '보관함 (좋아요한 곡)' : libView;
+  $('#delPl').hidden = libView===null;
+  $('#libList').innerHTML = items.length ? items.map((t,i)=>rowHtml(t,i)).join('') : '<div class="empty">아직 담긴 곡이 없어요</div>';
+}
+$('#libList').onclick=e=>{
+  const items=libItems();
+  const d=e.target.closest('[data-del]'); if(d){ items.splice(+d.dataset.del,1); save(); renderLib(); renderSide(); return; }
+  const r=e.target.closest('.row'); if(r) playList(items,+r.dataset.i);
+};
+$('#playLib').onclick=()=>{ const it=libItems(); if(it.length) playList(it,0); };
+$('#shufLib').onclick=()=>{ const it=libItems(); if(it.length) playList(it,0,true); };
+$('#delPl').onclick=()=>modal(`‘${libView}’ 삭제할까요?`,'',()=>{ delete playlists[libView]; libView=null; save(); renderSide(); renderLib(); });
+
+/* ---------- queue ---------- */
+function renderQueue(){
+  $('#queueList').innerHTML = queue.length ? queue.map((t,i)=>rowHtml(t,i,i===qi?'now':'')).join('') : '<div class="empty">대기열이 비어 있어요</div>';
+}
+function renderUpNext(){
+  const up=queue.slice(qi+1, qi+11);
+  $('#upNext').innerHTML = up.length ? up.map((t,k)=>rowHtml(t,qi+1+k)).join('') : '<div class="hint">대기열에 다음 곡이 없어요</div>';
+}
+function queueClick(e){
+  const d=e.target.closest('[data-del]');
+  if(d){ const i=+d.dataset.del; queue.splice(i,1); if(i<qi) qi--; save(); renderQueue(); renderUpNext(); return; }
+  const r=e.target.closest('.row'); if(r){ qi=+r.dataset.i; loadCur(); }
+}
+$('#queueList').onclick=queueClick; $('#upNext').onclick=queueClick;
+$('#clearQueue').onclick=()=>{ queue=[]; qi=0; if(ready) player.stopVideo(); save(); renderQueue(); updateNow(); };
+$('#saveQueue').onclick=()=>{ if(!queue.length) return; modal('대기열을 플레이리스트로 저장','<input placeholder="이름">',name=>{ if(!name) return false; playlists[name]=queue.map(t=>({id:t.id,title:t.title,ch:t.ch})); save(); renderSide(); toast('저장했어요'); }); };
+
+/* ---------- settings ---------- */
+$('#saveKey').onclick=()=>{ apiKey=$('#apiKey').value.trim(); S.set('apiKey',apiKey); toast(apiKey?'API 키를 저장했어요':'API 키를 지웠어요'); };
+$('#exportBtn').onclick=async()=>{
+  const data=JSON.stringify({liked,playlists});
+  try{ await navigator.clipboard.writeText(data); toast('복사했어요 — 메모장 등에 붙여넣어 보관하세요'); }
+  catch(e){ modal('아래 내용을 복사해 두세요',`<input value='${esc(data)}' readonly>`,()=>{}); }
+};
+$('#importBtn').onclick=()=>modal('보관함 가져오기','<input placeholder="내보낸 내용을 붙여넣기">',v=>{
+  try{ const d=JSON.parse(v); liked=d.liked||[]; playlists=d.playlists||{}; save(); renderSide(); toast('가져왔어요'); }catch(e){ toast('형식이 올바르지 않아요'); return false; }
+});
+
+renderSide(); updateNow();
+</script>
+</body>
+</html>
